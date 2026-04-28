@@ -1,0 +1,30 @@
+# PlaceIQ API Routes
+
+## Root & Health Endpoints
+- `GET /`
+- `GET /health`
+
+## Health Controller
+- `GET /api/health`
+
+## Auth Controller
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `PUT /api/auth/profile`
+
+## Student Controller
+- `GET /api/students`
+- `GET /api/students/{id}`
+
+## Company Controller
+- `GET /api/companies`
+- `GET /api/companies/{id}`
+- `POST /api/companies`
+- `PUT /api/companies/{id}`
+- `DELETE /api/companies/{id}`
+
+## Application Controller
+- `GET /api/applications`
+- `POST /api/applications`
+- `PUT /api/applications/{id}`
+- `GET /api/applications/company/{companyId}`
