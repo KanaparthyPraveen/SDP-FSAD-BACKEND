@@ -1,17 +1,28 @@
 package com.placeiq.service;
 
+import com.placeiq.dto.PredictionRequest;
+import com.placeiq.dto.PredictionResponse;
 import com.placeiq.model.Company;
+import com.placeiq.model.User;
 import com.placeiq.repository.CompanyRepository;
+import com.placeiq.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CompanyService {
 
     private final CompanyRepository companyRepository;
+    private final UserRepository userRepository;
+    @Lazy private final NotificationService notificationService;
+    @Lazy private final PredictionService predictionService;
 
     public List<Company> getAllCompanies() {
         return companyRepository.findAll();
@@ -29,7 +40,37 @@ public class CompanyService {
     public Company createCompany(Company company) {
         if (company.getStatus() == null) company.setStatus("active");
         if (company.getRegistrations() == null) company.setRegistrations(0);
-        return companyRepository.save(company);
+        Company saved = companyRepository.save(company);
+        // Async: notify matching students
+        notifyMatchingStudents(saved);
+        return saved;
+    }
+
+    @Async
+    public void notifyMatchingStudents(Company company) {
+        try {
+            List<User> students = userRepository.findByRole("student");
+            for (User student : students) {
+                try {
+                    PredictionResponse prediction = predictionService.predictRuleBased(student, company);
+                    if (prediction.getProbability() >= 0.60) {
+                        int pct = (int) Math.round(prediction.getProbability() * 100);
+                        notificationService.createAndPush(
+                            student.getId(),
+                            "NEW_COMPANY",
+                            "🏢 New Company — " + company.getName() + " (" + pct + "% Match!)",
+                            company.getName() + " is hiring for " + company.getRole()
+                                + ". You are a " + pct + "% match! Apply before " + company.getDeadline(),
+                            "/companies/" + company.getId()
+                        );
+                    }
+                } catch (Exception e) {
+                    log.warn("Skipping notification for student {}: {}", student.getId(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to run notifyMatchingStudents: {}", e.getMessage());
+        }
     }
 
     public Company updateCompany(String id, Company updates) {

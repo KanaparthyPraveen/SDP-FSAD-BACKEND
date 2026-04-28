@@ -1,0 +1,222 @@
+# PlaceIQ — Advanced Features Context Document
+# For: Real-Time Notifications + AI Placement Predictor
+# Project: College Placement Management System
+# Stack: React (Vite) + Spring Boot + MongoDB Atlas + Coolify Deployment
+
+==========================================================================
+SECTION 1: FULL PROJECT CONTEXT
+==========================================================================
+
+PROJECT NAME: PlaceIQ
+PURPOSE: College Placement Management System where students apply to companies
+         and admins manage the entire placement process.
+
+LIVE URLS:
+  Frontend: https://fsad.praveenkanaparthy.me   (React Vite, served via Nginx)
+  Backend:  https://fsadback.praveenkanaparthy.me  (Spring Boot REST API on Coolify)
+
+TECH STACK:
+  Frontend  → React 18, Vite, TailwindCSS
+  Backend   → Java 17, Spring Boot 3.2.4, Spring Security (JWT), Maven
+  Database  → MongoDB Atlas (Cloud), Database name = placeiq
+  Auth      → JWT (JSON Web Tokens), BCrypt password hashing
+  Hosting   → Coolify (self-hosted), Docker containers
+  Git Repos →
+    Frontend: https://github.com/KanaparthyPraveen/SDP-FSAD.git
+    Backend:  https://github.com/KanaparthyPraveen/SDP-FSAD-BACKEND.git
+
+USER ROLES:
+  1. ADMIN  → manages companies, reviews and updates application statuses
+  2. STUDENT → applies to companies, tracks status, updates profile
+
+MONGODB COLLECTIONS:
+  users        → { id, name, email, passwordHash, role, department, rollNo, year, cgpa, backlogs, skills[], phone, linkedIn, github }
+  companies    → { id, name, logo, role, ctc, location, type, minCgpa, maxBacklogs, skills[], status, openings, deadline, description, aboutCompany }
+  applications → { id, companyId, companyName, companyLogo, role, packageOffered, applicant{snapshot}, status, currentRound, appliedDate, appliedAt, probability, rounds[{name, status, completedAt}] }
+
+APPLICATION STATUS FLOW:
+  applied → interview → shortlisted → selected
+                      ↘ rejected
+
+ROUND STATUSES: PENDING | CLEARED | ONGOING | REJECTED
+
+EXISTING API ROUTES:
+  POST /api/auth/register
+  POST /api/auth/login
+  PUT  /api/auth/profile
+  GET  /api/students
+  GET  /api/students/{id}
+  GET/POST/PUT/DELETE /api/companies
+  GET/POST/PUT /api/applications
+  GET  /api/applications/company/{companyId}
+
+==========================================================================
+SECTION 2: FEATURE 1 — REAL-TIME NOTIFICATIONS
+==========================================================================
+
+GOAL:
+  When an admin updates a student's application status (e.g., from "applied"
+  to "shortlisted"), the student should INSTANTLY see a notification in their
+  React frontend WITHOUT refreshing the page.
+
+TRIGGER EVENTS (when notifications should fire):
+  1. Application status changed (applied → interview → shortlisted → selected → rejected)
+  2. Round status updated (e.g., OA → CLEARED)
+  3. New company posted by admin
+  4. Application deadline approaching (24 hours before)
+  5. Admin accepts/rejects student profile update
+
+WHAT EACH NOTIFICATION SHOULD CONTAIN:
+  {
+    "id": "uuid",
+    "userId": "student_mongo_id",
+    "type": "STATUS_UPDATE | ROUND_UPDATE | NEW_COMPANY | DEADLINE_ALERT",
+    "title": "Application Update - Google",
+    "message": "Your application for Google SDE has been shortlisted!",
+    "read": false,
+    "createdAt": "2026-04-28T10:00:00Z",
+    "link": "/applications/{applicationId}"
+  }
+
+IMPLEMENTATION OPTIONS (give AI all 3 to compare):
+
+OPTION A — WebSocket (Spring + STOMP + SockJS)
+  Backend: Spring Boot WebSocket config + SockJS + STOMP broker
+  Frontend: @stomp/stompjs + sockjs-client npm packages
+  How: Backend pushes message to /topic/notifications/{userId}
+  Pros: True real-time, bidirectional
+  Cons: Needs persistent connection, harder to scale
+
+OPTION B — Server-Sent Events (SSE)
+  Backend: SseEmitter in Spring Boot controller
+  Frontend: Native EventSource API in JavaScript
+  How: Client opens one-way stream, server pushes events
+  Pros: Simple, HTTP-based, no extra libraries
+  Cons: One-way only (server → client), connection drops need reconnect
+
+OPTION C — Polling (Simplest)
+  Backend: GET /api/notifications?userId={id}&unread=true
+  Frontend: setInterval to call API every 5-10 seconds
+  Pros: Easiest to implement, no new infra
+  Cons: Not true real-time, wastes bandwidth
+
+RECOMMENDED APPROACH: Option B (SSE) for simplicity on Coolify, or Option A for full real-time
+
+NEW MONGODB COLLECTION NEEDED:
+  notifications → { id, userId, type, title, message, read, createdAt, link }
+
+NEW BACKEND ENDPOINTS NEEDED:
+  GET  /api/notifications              → get all notifications for logged-in user
+  PUT  /api/notifications/{id}/read    → mark one as read
+  PUT  /api/notifications/read-all     → mark all as read
+  GET  /api/notifications/stream       → SSE stream endpoint (if using SSE)
+
+FRONTEND CHANGES NEEDED:
+  1. Notification bell icon in navbar with unread count badge
+  2. Dropdown panel showing recent notifications
+  3. Mark as read on click
+  4. Auto-connect to SSE stream or WebSocket on login
+  5. Toast popup when new notification arrives
+
+==========================================================================
+SECTION 3: FEATURE 2 — AI PLACEMENT PREDICTOR
+==========================================================================
+
+GOAL:
+  When a student views a company, show them a PREDICTION SCORE (0-100%)
+  indicating their likelihood of getting placed at that company based on
+  their profile vs company requirements.
+
+INPUT FEATURES (student profile):
+  - cgpa (float, 0-10)
+  - backlogs (int, 0-N)
+  - skills (array of strings)
+  - department (string)
+  - year (int)
+  - numberOfApplications (how many companies applied so far)
+  - pastApplicationResults (selected/rejected ratio if any)
+
+INPUT FEATURES (company requirements):
+  - minCgpa (float)
+  - maxBacklogs (int)
+  - requiredSkills (array of strings)
+  - type (Product Based / Service Based)
+  - ctc (salary offered)
+  - openings (number of seats)
+
+OUTPUT:
+  - probability (float, 0.0 to 1.0, e.g. 0.85 = 85% chance)
+  - reasoning (string, e.g., "Strong CGPA match, 3/5 skills matched, no backlogs")
+  - recommendation (string: "Highly Recommended" | "Good Match" | "Borderline" | "Not Eligible")
+
+IMPLEMENTATION OPTIONS (give AI all 3 to compare):
+
+OPTION A — Rule-Based Scoring (No ML, Easiest)
+  Pure Java logic inside Spring Boot service:
+  Score = weighted sum of:
+    CGPA match:       40% weight → (studentCgpa - minCgpa) / (10 - minCgpa)
+    Skills match:     35% weight → matchedSkills / totalRequiredSkills
+    Backlogs check:   15% weight → 1 if backlogs <= maxBacklogs, else 0
+    Department match: 10% weight → 1 if relevant dept, else 0.5
+  Pros: No external dependency, fast, explainable
+  Cons: Not truly intelligent, doesn't learn from data
+
+OPTION B — Python ML Microservice (Flask/FastAPI)
+  Train a model (Logistic Regression or Random Forest) on synthetic placement data
+  Deploy as separate Docker container on Coolify
+  Spring Boot calls Python API via HTTP to get prediction
+  Data: { cgpa, backlogs, skillMatchRatio, deptMatch } → 0 or 1 (placed/not)
+  Pros: Real ML, improves with more data
+  Cons: Extra service to maintain, needs training data
+
+OPTION C — Gemini / OpenAI API (LLM-based)
+  Spring Boot sends student profile + company requirements to Gemini/GPT
+  LLM returns probability and reasoning in JSON format
+  Prompt example: "Given student CGPA 8.5, skills [Java, React], 0 backlogs,
+                   and company requires CGPA 8.0, skills [Java, AWS], give placement
+                   probability as JSON {probability: 0.78, reasoning: '...', recommendation: '...'}"
+  Pros: Smart reasoning, no training data needed
+  Cons: API cost, latency, needs internet from backend
+
+RECOMMENDED: Start with Option A, upgrade to Option C (Gemini API is free tier)
+
+NEW BACKEND ENDPOINT NEEDED:
+  POST /api/predict
+  Body: { "studentId": "...", "companyId": "..." }
+  Response: { "probability": 0.82, "reasoning": "...", "recommendation": "Good Match" }
+
+FRONTEND CHANGES NEEDED:
+  1. On company card → show prediction badge (e.g., "82% Match 🔥")
+  2. Color coded: green (>70%), yellow (40-70%), red (<40%)
+  3. On company detail page → show full reasoning text
+  4. Student dashboard → show "Best Match Companies" section sorted by prediction score
+
+==========================================================================
+SECTION 4: INTEGRATION POINTS
+==========================================================================
+
+NOTIFICATIONS + PREDICTOR TOGETHER:
+  - When admin posts a new company, run prediction for all students
+  - Send notification only to students with >60% match score:
+    "New company Google is a 82% match for your profile! Apply before May 1"
+
+EXISTING PROBABILITY FIELD:
+  The Application model already has a `probability` field (double).
+  This was hardcoded in DataSeeder. The AI predictor should now SET this
+  field dynamically when a student applies.
+
+==========================================================================
+SECTION 5: SUGGESTED IMPLEMENTATION ORDER
+==========================================================================
+
+Phase 1 (Week 1): Rule-Based Predictor (Option A)
+  → Pure Java, no new infra, deploy immediately
+
+Phase 2 (Week 2): SSE Notifications (Option B)
+  → Add notifications collection, SSE stream, bell icon in React
+
+Phase 3 (Week 3): Upgrade Predictor to Gemini API (Option C)
+  → Replace rule logic with LLM call, add reasoning display in UI
+
+Phase 4 (Week 4): Connect both features
+  → Notify students of high-match new companies automatically

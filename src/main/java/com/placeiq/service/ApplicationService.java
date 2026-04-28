@@ -9,6 +9,8 @@ import com.placeiq.repository.ApplicationRepository;
 import com.placeiq.repository.CompanyRepository;
 import com.placeiq.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -17,6 +19,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ApplicationService {
@@ -24,6 +27,8 @@ public class ApplicationService {
     private final ApplicationRepository applicationRepository;
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
+    @Lazy
+    private final NotificationService notificationService;
 
     /* ─── Student: Apply ─── */
     public Application apply(String userId, ApplyRequest req) {
@@ -153,6 +158,9 @@ public class ApplicationService {
             app.setRounds(rounds);
         }
 
+        // Remember old status for notification comparison
+        String oldStatus = app.getStatus();
+
         // Direct status override
         if (req.getStatus() != null) {
             app.setStatus(req.getStatus());
@@ -191,7 +199,32 @@ public class ApplicationService {
         // Save notes
         if (req.getNotes() != null) app.setNotes(req.getNotes());
 
-        return applicationRepository.save(app);
+        Application saved = applicationRepository.save(app);
+
+        // 🔔 Fire notification if status changed
+        try {
+            String studentId = saved.getApplicant() != null ? saved.getApplicant().getUserId() : null;
+            if (studentId != null && !saved.getStatus().equals(oldStatus)) {
+                String emoji = switch (saved.getStatus()) {
+                    case "selected"    -> "🎉";
+                    case "rejected"    -> "❌";
+                    case "interview"   -> "📅";
+                    case "shortlisted" -> "⭐";
+                    default -> "📋";
+                };
+                notificationService.createAndPush(
+                    studentId,
+                    "STATUS_UPDATE",
+                    emoji + " Application Update — " + saved.getCompanyName(),
+                    "Your application for " + saved.getCompanyName() + " is now " + saved.getStatus().toUpperCase() + "!",
+                    "/applications/" + saved.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send notification: {}", e.getMessage());
+        }
+
+        return saved;
     }
 
     public List<Application> getApplicationsByCompany(String companyId) {
