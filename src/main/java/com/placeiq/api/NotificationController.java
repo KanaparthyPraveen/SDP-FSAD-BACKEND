@@ -28,25 +28,25 @@ public class NotificationController {
     /** Get all notifications for a user */
     @GetMapping
     public ResponseEntity<ApiResponse<List<Notification>>> getAll(@RequestParam String userId) {
-        return ResponseEntity.ok(ApiResponse.success(notificationService.getForUser(userId)));
+        return ResponseEntity.ok(ApiResponse.ok(notificationService.getForUser(userId)));
     }
 
     /** Unread count */
     @GetMapping("/count")
     public ResponseEntity<ApiResponse<Long>> unreadCount(@RequestParam String userId) {
-        return ResponseEntity.ok(ApiResponse.success(notificationService.unreadCount(userId)));
+        return ResponseEntity.ok(ApiResponse.ok(notificationService.unreadCount(userId)));
     }
 
     /** Mark one notification as read */
     @PutMapping("/{id}/read")
     public ResponseEntity<ApiResponse<Notification>> markRead(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.success(notificationService.markRead(id)));
+        return ResponseEntity.ok(ApiResponse.ok(notificationService.markRead(id)));
     }
 
     /** Mark all as read */
     @PutMapping("/read-all")
     public ResponseEntity<ApiResponse<String>> markAllRead(@RequestParam String userId) {
         notificationService.markAllRead(userId);
-        return ResponseEntity.ok(ApiResponse.success("All notifications marked as read"));
+        return ResponseEntity.ok(ApiResponse.ok("All notifications marked as read"));
     }
 }

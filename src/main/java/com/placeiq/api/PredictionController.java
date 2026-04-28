@@ -18,6 +18,6 @@ public class PredictionController {
     @PostMapping
     public ResponseEntity<ApiResponse<PredictionResponse>> predict(@RequestBody PredictionRequest request) {
         PredictionResponse result = predictionService.predict(request);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return ResponseEntity.ok(ApiResponse.ok(result));
     }
 }
