@@ -1,30 +1,49 @@
 # PlaceIQ API Routes
+# Base URL: https://fsadback.praveenkanaparthy.me
+# ============================================================
+# FORMAT: [METHOD] URL  # What it does | How to call it
+# ============================================================
 
-## Root & Health Endpoints
-- `GET /`
-- `GET /health`
 
-## Health Controller
-- `GET /api/health`
+## HEALTH ENDPOINTS (Test in Browser)
+GET https://fsadback.praveenkanaparthy.me/              # Returns "API Running" | Open in browser
+GET https://fsadback.praveenkanaparthy.me/health        # Returns "OK" | Open in browser
+GET https://fsadback.praveenkanaparthy.me/api/health    # Returns health status | Open in browser
 
-## Auth Controller
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `PUT /api/auth/profile`
 
-## Student Controller
-- `GET /api/students`
-- `GET /api/students/{id}`
+## AUTH ENDPOINTS (Use Postman or Frontend)
+POST https://fsadback.praveenkanaparthy.me/api/auth/register
+# Register a new user | Body: { "name": "Praveen Kumar", "email": "praveen@student.com", "password": "Admin@1234", "role": "student", "department": "Computer Science", "rollNo": "CS21B001", "year": 4 }
 
-## Company Controller
-- `GET /api/companies`
-- `GET /api/companies/{id}`
-- `POST /api/companies`
-- `PUT /api/companies/{id}`
-- `DELETE /api/companies/{id}`
+POST https://fsadback.praveenkanaparthy.me/api/auth/login
+# Login and get JWT token | Body: { "email": "praveen@student.com", "password": "Admin@1234" }
 
-## Application Controller
-- `GET /api/applications`
-- `POST /api/applications`
-- `PUT /api/applications/{id}`
-- `GET /api/applications/company/{companyId}`
+PUT https://fsadback.praveenkanaparthy.me/api/auth/profile
+# Update student profile | Requires: Authorization: Bearer <token> in header
+
+
+## STUDENT ENDPOINTS (Test GET in Browser)
+GET https://fsadback.praveenkanaparthy.me/api/students          # Get all students | Open in browser
+GET https://fsadback.praveenkanaparthy.me/api/students/{id}     # Get one student by ID | Replace {id} with actual ID from above
+
+
+## COMPANY ENDPOINTS (GET in Browser, others via Postman/Frontend)
+GET    https://fsadback.praveenkanaparthy.me/api/companies          # Get all companies | Open in browser
+GET    https://fsadback.praveenkanaparthy.me/api/companies/{id}     # Get one company | Replace {id} with actual ID
+POST   https://fsadback.praveenkanaparthy.me/api/companies          # Create a company | Admin only | Body: { "name": "Google", "role": "SDE", "ctc": "45 LPA", "location": "Bangalore", "type": "Product Based", "minCgpa": 8.0, "maxBacklogs": 0, "openings": 10, "deadline": "2026-06-01" }
+PUT    https://fsadback.praveenkanaparthy.me/api/companies/{id}     # Update company | Admin only | Body: same as POST
+DELETE https://fsadback.praveenkanaparthy.me/api/companies/{id}     # Delete company | Admin only
+
+
+## APPLICATION ENDPOINTS (GET in Browser, others via Postman/Frontend)
+GET  https://fsadback.praveenkanaparthy.me/api/applications                       # Get all applications | Open in browser
+GET  https://fsadback.praveenkanaparthy.me/api/applications/company/{companyId}   # Get applications for a specific company | Replace {companyId} with actual ID
+POST https://fsadback.praveenkanaparthy.me/api/applications                       # Apply for a company | Requires: Login token | Body: { "companyId": "<id>", "coverLetter": "I am interested..." }
+PUT  https://fsadback.praveenkanaparthy.me/api/applications/{id}                  # Update application status | Admin only | Body: { "status": "shortlisted" }
+
+
+# ============================================================
+# DEFAULT TEST ACCOUNTS (auto-seeded on startup)
+# ============================================================
+# Admin   → email: admin@pis.com      | password: Admin@1234
+# Student → email: praveen@student.com | password: Admin@1234
